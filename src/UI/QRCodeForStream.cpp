@@ -291,11 +291,8 @@ void QRCodeForStream::setUrl(const std::string& url, const std::map<std::string,
     av_dict_set(&pAvdictionary, "analyzeduration", "200000", 0);
     av_dict_set(&pAvdictionary, "fflags", "nobuffer", 0);
     av_dict_set(&pAvdictionary, "flags", "low_delay", 0);
+    av_dict_set(&pAvdictionary, "framedrop", "1", 0);
     av_dict_set(&pAvdictionary, "strict_std_compliance", "-2", 0);
-
-    // Do DNS/TCP/TLS before the QR appears. The same CPR easy handle is then
-    // reused for Scan -> Confirm on api-sdk.mihoyo.com.
-    lowlatency::WarmupQrApiConnection();
 }
 
 auto QRCodeForStream::init() -> bool
@@ -401,6 +398,10 @@ void QRCodeForStream::run()
         latestFrame.release();
     }
 
+    const bool keepOfficialApiWarm = servertype == ServerType::Official;
+    if (keepOfficialApiWarm)
+        lowlatency::StartQrApiKeepWarm();
+
     if (init())
     {
 #ifndef SHOW
@@ -427,6 +428,9 @@ void QRCodeForStream::run()
 
     m_stop.store(false, std::memory_order_release);
     threadPool.waitForDone();
+
+    if (keepOfficialApiWarm)
+        lowlatency::StopQrApiKeepWarm();
 
     if (ret == ScanRet::LIVESTOP || ret == ScanRet::STREAMERROR)
         Q_EMIT loginResults(ret);
