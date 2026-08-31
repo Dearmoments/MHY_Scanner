@@ -1,0 +1,75 @@
+name: Reconstruct 1.2 Low Latency
+
+on:
+  push:
+    branches: [ "reconstruct-1.2-low-latency" ]
+  workflow_dispatch:
+
+env:
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  reconstruct-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        shell: pwsh
+        run: |
+          git config user.name "MHY reconstruction CI"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Reconstruct 1.2 and apply low-latency changes
+        shell: pwsh
+        run: ./reconstruction/apply-1.2-low-latency.ps1
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.0'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}\scripts\buildsystems\vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}\install `
+            -DUNIT_TESTS=OFF `
+            -DDEV=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
+
+      - name: Install
+        shell: pwsh
+        run: cmake --install build --config ${{ env.BUILD_CONFIGURATION }}
+
+      - name: Package reconstructed source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifact | Out-Null
+          git diff --binary HEAD | Out-File -Encoding utf8 artifact/low-latency-working-tree.patch
+          $exclude = @('.git','build','install','.deps','vcpkg-cache')
+          Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name -and $_.Name -ne 'artifact' } | Compress-Archive -DestinationPath artifact/MHY_Scanner_1.2_reconstructed_lowlatency_source.zip
+          Get-ChildItem install -Recurse | Compress-Archive -DestinationPath artifact/MHY_Scanner_1.2_reconstructed_lowlatency_binary.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MHY_Scanner_1.2_reconstructed_lowlatency
+          path: artifact/*
+          retention-days: 7
