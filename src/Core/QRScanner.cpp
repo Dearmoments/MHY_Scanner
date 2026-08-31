@@ -2,10 +2,10 @@
 
 #include <stdexcept>
 
-#include <ZXing/BarcodeFormat.h>
-#include <ZXing/ImageView.h>
-#include <ZXing/ReadBarcode.h>
-#include <ZXing/ReaderOptions.h>
+#include <BarcodeFormat.h>
+#include <ImageView.h>
+#include <ReadBarcode.h>
+#include <ReaderOptions.h>
 
 namespace
 {

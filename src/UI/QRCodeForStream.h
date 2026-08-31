@@ -1,5 +1,9 @@
 ﻿#pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <atomic>
 #include <mutex>
 #include <string_view>
