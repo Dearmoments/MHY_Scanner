@@ -26,8 +26,8 @@ IDI_ICON1               ICON                    "MHY_Scanner.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,0,0
- PRODUCTVERSION 0,0,0,0
+ FILEVERSION 1,2,0,0
+ PRODUCTVERSION 1,2,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -43,13 +43,13 @@ BEGIN
         BLOCK "080404b0"
         BEGIN
             VALUE "CompanyName", "TODO: <公司名>"
-            VALUE "FileDescription", "MHY扫码器"
-            VALUE "FileVersion", "1.1.13"
-            VALUE "InternalName", "TODO: <内部名称>"
+            VALUE "FileDescription", "MHY扫码器（低延迟版）"
+            VALUE "FileVersion", "1.2.0-lowlatency"
+            VALUE "InternalName", "MHY_Scanner-lowlatency"
             VALUE "LegalCopyright", "Copyright (C) 2024"
             VALUE "OriginalFilename", "MHY_Scanner.exe"
-            VALUE "ProductName", "TODO: <产品名>"
-            VALUE "ProductVersion", "1.1.14"
+            VALUE "ProductName", "MHY扫码器低延迟版"
+            VALUE "ProductVersion", "1.2.0-lowlatency"
         END
     END
     BLOCK "VarFileInfo"
