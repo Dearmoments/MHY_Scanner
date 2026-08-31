@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "reconstruct-1.2-lowlatency" ]
     tags: ["v*"]
   workflow_dispatch:
 env:
