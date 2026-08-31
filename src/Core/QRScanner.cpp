@@ -1,46 +1,72 @@
 ﻿#include "QRScanner.h"
 
-#define DETECT_PROTOTXT_PATH "./ScanModel/detect.prototxt"
-#define DETECT_CAFFE_MODEL_PATH "./ScanModel/detect.caffemodel"
-#define SR_PROTOTXT_PATH "./ScanModel/sr.prototxt"
-#define SR_CAFFE_MODEL_PATH "./ScanModel/sr.caffemodel"
+#include <stdexcept>
 
-QRScanner::QRScanner()
+#include <ZXing/BarcodeFormat.h>
+#include <ZXing/ImageView.h>
+#include <ZXing/ReadBarcode.h>
+#include <ZXing/ReaderOptions.h>
+
+namespace
 {
-    detector = cv::makePtr<cv::wechat_qrcode::WeChatQRCode>(DETECT_PROTOTXT_PATH, DETECT_CAFFE_MODEL_PATH,
-                                                            SR_PROTOTXT_PATH, SR_CAFFE_MODEL_PATH);
-    detector->setScaleFactor(0.4);
+ZXing::ReaderOptions FastQrOptions()
+{
+    ZXing::ReaderOptions options;
+    options.setFormats(ZXing::BarcodeFormat::QRCode);
+    options.setTryHarder(false);
+    options.setTryRotate(false);
+    options.setTryInvert(false);
+    options.setTryDownscale(true);
+    options.setMaxNumberOfSymbols(1);
+    return options;
 }
 
-QRScanner::~QRScanner()
+ZXing::ImageView MakeImageView(const cv::Mat& img)
 {
+    switch (img.channels())
+    {
+    case 1:
+        return ZXing::ImageView(img.data, img.cols, img.rows, ZXing::ImageFormat::Lum,
+                                static_cast<int>(img.step));
+    case 3:
+        return ZXing::ImageView(img.data, img.cols, img.rows, ZXing::ImageFormat::BGR,
+                                static_cast<int>(img.step));
+    case 4:
+        return ZXing::ImageView(img.data, img.cols, img.rows, ZXing::ImageFormat::BGRA,
+                                static_cast<int>(img.step));
+    default:
+        throw std::invalid_argument("Unsupported cv::Mat channel count for QR decoding");
+    }
 }
+} // namespace
 
 void QRScanner::decodeSingle(const cv::Mat& img, std::string& qrCode)
 {
-#ifndef TESTSPEED
-    auto startTime = std::chrono::high_resolution_clock::now();
-#endif
-    const std::vector<std::string>& strDecoded = detector->detectAndDecode(img);
-    if (strDecoded.size() > 0)
-    {
-        qrCode = strDecoded[0];
-    }
-#ifndef TESTSPEED
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-    std::cout << static_cast<float>(duration) / 1000000 << " decode: " << qrCode << std::endl;
-#endif
+    qrCode.clear();
+    if (img.empty())
+        return;
+
+    const auto imageView = MakeImageView(img);
+    const auto result = ZXing::ReadBarcode(imageView, FastQrOptions());
+    if (result.isValid())
+        qrCode = result.text();
 }
 
 void QRScanner::decodeMultiple(const cv::Mat& img, std::string& qrCode)
 {
-    const std::vector<std::string>& strDecoded = detector->detectAndDecode(img);
-    for (int i = 0; i < strDecoded.size(); i++)
+    qrCode.clear();
+    if (img.empty())
+        return;
+
+    ZXing::ReaderOptions options = FastQrOptions();
+    options.setMaxNumberOfSymbols(8);
+    const auto results = ZXing::ReadBarcodes(MakeImageView(img), options);
+    for (const auto& result : results)
     {
-        qrCode = strDecoded[i];
-#ifdef _DEBUG
-        std::cout << "decode:" << qrCode << std::endl;
-#endif // DEBUG
+        if (result.isValid())
+        {
+            qrCode = result.text();
+            return;
+        }
     }
 }

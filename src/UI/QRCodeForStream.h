@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <atomic>
+#include <mutex>
 #include <string_view>
 
 extern "C"
@@ -12,10 +13,9 @@ extern "C"
 #include <libswscale/swscale.h>
 };
 
+#include <opencv2/core/mat.hpp>
+
 #include <QThread>
-#include <QMutex>
-#include <QtConcurrent/QtConcurrent>
-#include <QFuture>
 #include <QThreadPool>
 
 #include "ApiDefs.hpp"
@@ -37,7 +37,7 @@ public:
     void setServerType(const ServerType servertype);
     void setUrl(const std::string& url, const std::map<std::string, std::string> heard = {});
     auto init() -> bool;
-    void run();
+    void run() override;
     void stop();
     void continueLastLogin();
 
@@ -46,10 +46,22 @@ Q_SIGNALS:
     void loginConfirm(const GameType gameType, bool b);
 
 private:
-    std::mutex mtx;
     void LoginOfficial();
     void LoginBH3BiliBili();
     void setStreamHW();
+
+    // Low-latency frame path: at most one frame is waiting. A newer frame
+    // overwrites an older pending frame instead of building a stale queue.
+    void submitLatestFrame(cv::Mat&& img);
+    void processLatestFrames();
+    void processOfficialFrame(const cv::Mat& img);
+    void processBiliFrame(const cv::Mat& img);
+
+    std::mutex loginMutex;
+    std::mutex frameMutex;
+    cv::Mat latestFrame;
+    std::atomic<bool> qrWorkerRunning{ false };
+
     std::string streamUrl{};
     std::string m_name;
     ConfigDate* m_config;
@@ -64,7 +76,6 @@ private:
     int videoStreamIndex{ 0 };
     int videoStreamWidth{};
     int videoStreamHeight{};
-    const int threadNumber{ 2 };
     QThreadPool threadPool;
     std::atomic<bool> m_stop;
 };

@@ -1,6 +1,6 @@
 ﻿cmake_minimum_required(VERSION 3.26)
 project(MHY_Scanner
-	VERSION 1.1.15
+	VERSION 1.2.0
 	LANGUAGES CXX
 )
 
@@ -19,8 +19,8 @@ add_definitions(-DMHY_Scanner_VERSION="${PROJECT_VERSION}")
 if(MSVC)
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 	add_compile_options(/Zi /sdl /arch:AVX2 /utf-8)
-	#add_compile_options("/analyze:external-")
 	if(CMAKE_BUILD_TYPE STREQUAL "Release")
+		add_compile_options(/O2)
 		add_link_options(/DEBUG /OPT:REF,ICF,LBR)
 	endif()
 endif()
@@ -37,8 +37,25 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-find_package(unofficial-webview2 CONFIG REQUIRED)
+# MHY_Scanner 1.2 switched the hot QR decode path from OpenCV WeChatQRCode
+# models to zxing-cpp. Pin the last 2.x release because its public API still
+# exposes ZXing::Result/Barcode behavior seen in the 1.2 PDB.
+set(ZXING_READERS ON CACHE BOOL "" FORCE)
+set(ZXING_WRITERS OFF CACHE STRING "" FORCE)
+set(ZXING_C_API OFF CACHE BOOL "" FORCE)
+set(ZXING_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ZXING_EXAMPLES_QT OFF CACHE BOOL "" FORCE)
+set(ZXING_BLACKBOX_TESTS OFF CACHE BOOL "" FORCE)
+set(ZXING_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+	zxing_cpp
+	GIT_REPOSITORY https://github.com/zxing-cpp/zxing-cpp.git
+	GIT_TAG v2.3.0
+	GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(zxing_cpp)
 
+find_package(unofficial-webview2 CONFIG REQUIRED)
 find_package(cpr CONFIG REQUIRED)
 
 find_package(OpenCV REQUIRED opencv_world)
@@ -49,11 +66,7 @@ find_package(OpenSSL REQUIRED)
 
 find_package(Qt6 COMPONENTS Widgets REQUIRED)
 
-#boost
 include_directories(${CMAKE_SOURCE_DIR}/3rdparty/boost)
-
-#include_directories(./3rdparty/abogus_cpp)
-#link_directories(./3rdparty/abogus_cpp)
 
 if(NOT DEV)
 	add_definitions(-DTESTSPEED)
@@ -64,19 +77,19 @@ include_directories(src/Core)
 
 add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/Resources/MHY_Scanner.rc"
-	"${CMAKE_SOURCE_DIR}/src/Resources/MHY_Scanner.qrc" 
-	"${CMAKE_SOURCE_DIR}/src/UI/Main.cpp" 
+	"${CMAKE_SOURCE_DIR}/src/Resources/MHY_Scanner.qrc"
+	"${CMAKE_SOURCE_DIR}/src/UI/Main.cpp"
 	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForStream.cpp"
 	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForStream.h"
-	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForScreen.cpp" 
-	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForScreen.h" 
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowAbout.cpp" 
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowAbout.h" 
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowMain.cpp" 
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowMain.h" 
+	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForScreen.cpp"
+	"${CMAKE_SOURCE_DIR}/src/UI/QRCodeForScreen.h"
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowAbout.cpp"
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowAbout.h"
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowMain.cpp"
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowMain.h"
 	"${CMAKE_SOURCE_DIR}/src/UI/WindowLogin.h"
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowLogin.cpp" 
-	"${CMAKE_SOURCE_DIR}/src/UI/WindowGeeTest.h" 
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowLogin.cpp"
+	"${CMAKE_SOURCE_DIR}/src/UI/WindowGeeTest.h"
 	"${CMAKE_SOURCE_DIR}/src/UI/WindowGeeTest.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/CryptoKit.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/CryptoKit.h"
@@ -84,6 +97,7 @@ add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/Core/LiveStreamLink.h"
 	"${CMAKE_SOURCE_DIR}/src/Core/QRScanner.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/QRScanner.h"
+	"${CMAKE_SOURCE_DIR}/src/Core/LowLatencyHttp.hpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/ScreenScan.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/ScreenScan.h"
 	"${CMAKE_SOURCE_DIR}/src/Core/ConfigDate.cpp"
@@ -97,23 +111,19 @@ add_executable(${PROJECT_NAME}
 )
 
 if(NOT DEV)
-	#target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:WINDOWS")
 	set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 set(PROJECT_LIBRARIES
-	# windows
 	Ws2_32
 	wldap32
 	Normaliz
 	Dbghelp
-
-	# Qt6
 	Qt6::Core
 	Qt6::Widgets
-
 	cpr::cpr
 	QR_Code_generator
+	ZXing::Core
 	unofficial::webview2::webview2
 	nlohmann_json::nlohmann_json
 	${OpenCV_LIBS}
@@ -137,7 +147,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	"$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )
 
-# unit tests
 if(UNIT_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
@@ -148,11 +157,9 @@ if(UNIT_TESTS)
 	target_link_libraries(test_streamlink PRIVATE ${PROJECT_LIBRARIES})
 endif()
 
-# install
 set(Install_Directory "${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}_${PROJECT_VERSION}")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${Install_Directory})
-
 install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${Install_Directory})
 
 set(QT_DLL_FILES
@@ -162,10 +169,10 @@ set(QT_DLL_FILES
 )
 
 install(
-	FILES 
+	FILES
 	${QT_DLL_FILES}
 	${FFMPEG_DLL_FILES}
-	DESTINATION 
+	DESTINATION
 	${Install_Directory}
 )
 
@@ -184,11 +191,4 @@ install(
 	${QT6_INSTALL_PREFIX}/plugins/styles/qmodernwindowsstyle.dll
 	DESTINATION
 	${Install_Directory}/plugins/styles
-)
-
-install(
-	DIRECTORY
-	ScanModel
-	DESTINATION
-	${Install_Directory}
 )
