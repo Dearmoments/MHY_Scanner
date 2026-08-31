@@ -75,6 +75,21 @@ endif()
 
 include_directories(src/Core)
 
+# The closed 1.2 binary requests Bilibili qn=80. The last public source still
+# contains qn=10000 in a file with a very large generated Douyin cookie. Build
+# from a generated copy so the reconstructed branch exactly uses qn=80 without
+# touching unrelated Douyin behavior.
+set(LOWLATENCY_GENERATED_DIR "${CMAKE_BINARY_DIR}/lowlatency-generated")
+file(MAKE_DIRECTORY "${LOWLATENCY_GENERATED_DIR}")
+file(READ "${CMAKE_SOURCE_DIR}/src/Core/LiveStreamLink.cpp" LIVE_STREAM_LINK_SOURCE)
+string(FIND "${LIVE_STREAM_LINK_SOURCE}" "{ \"qn\", \"10000\" }" LIVE_STREAM_QN_POS)
+if(LIVE_STREAM_QN_POS EQUAL -1)
+	message(FATAL_ERROR "Expected Bilibili qn=10000 source pattern was not found")
+endif()
+string(REPLACE "{ \"qn\", \"10000\" }" "{ \"qn\", \"80\" }" LIVE_STREAM_LINK_SOURCE "${LIVE_STREAM_LINK_SOURCE}")
+set(LOWLATENCY_LIVE_STREAM_CPP "${LOWLATENCY_GENERATED_DIR}/LiveStreamLink.cpp")
+file(WRITE "${LOWLATENCY_LIVE_STREAM_CPP}" "${LIVE_STREAM_LINK_SOURCE}")
+
 add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/Resources/MHY_Scanner.rc"
 	"${CMAKE_SOURCE_DIR}/src/Resources/MHY_Scanner.qrc"
@@ -93,7 +108,7 @@ add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/UI/WindowGeeTest.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/CryptoKit.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/CryptoKit.h"
-	"${CMAKE_SOURCE_DIR}/src/Core/LiveStreamLink.cpp"
+	"${LOWLATENCY_LIVE_STREAM_CPP}"
 	"${CMAKE_SOURCE_DIR}/src/Core/LiveStreamLink.h"
 	"${CMAKE_SOURCE_DIR}/src/Core/QRScanner.cpp"
 	"${CMAKE_SOURCE_DIR}/src/Core/QRScanner.h"
