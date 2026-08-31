@@ -23,6 +23,14 @@ jobs:
           git config user.name "MHY reconstruction CI"
           git config user.email "actions@users.noreply.github.com"
 
+      - name: Fix reconstruction fetch depth
+        shell: pwsh
+        run: |
+          $path = './reconstruction/apply-1.2-low-latency.ps1'
+          $text = Get-Content $path -Raw
+          $text = $text.Replace('fetch --no-tags --depth=1', 'fetch --no-tags')
+          Set-Content -Path $path -Value $text -Encoding utf8
+
       - name: Reconstruct 1.2 and apply low-latency changes
         shell: pwsh
         run: ./reconstruction/apply-1.2-low-latency.ps1
