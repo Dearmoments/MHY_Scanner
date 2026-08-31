@@ -11,11 +11,9 @@
 			"default-features": false,
 			"features": [
 				"world",
-				"contrib",
 				"highgui",
 				"jpeg",
 				"png",
-				"quirc",
 				"thread",
 				"webp",
 				"dshow",
