@@ -7,8 +7,21 @@
 			"name": "cpr"
 		},
 		{
-			"name": "opencv",
-			"features": [ "world", "contrib" ]
+			"name": "opencv4",
+			"default-features": false,
+			"features": [
+				"world",
+				"contrib",
+				"highgui",
+				"jpeg",
+				"png",
+				"quirc",
+				"thread",
+				"webp",
+				"dshow",
+				"msmf",
+				"win32ui"
+			]
 		},
 		{
 			"name": "openssl"
