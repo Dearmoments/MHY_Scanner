@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <ranges>
+#include <exception>
 
 #include <Windows.h>
 
@@ -523,10 +524,18 @@ void WindowLogin::StartQRCodeLogin()
         QRCodeQImage.fill(255);
         QRCodelabel->setText("二维码加载中");
         AllowDrawQRCode.store(false);
-        const std::string qrcodeString{ GetLoginQrcodeUrl() };
-        ticket = std::string{ qrcodeString.data() + qrcodeString.size() - 24, 24 };
-        QrcodeMat = createQrCodeToCvMat(qrcodeString);
-        QRCodeQImage = CV_8UC1_MatToQImage(QrcodeMat);
+        try
+        {
+            const auto qrData = GetLoginQrcodeUrl();
+            ticket = qrData.ticket;
+            QrcodeMat = createQrCodeToCvMat(qrData.url);
+            QRCodeQImage = CV_8UC1_MatToQImage(QrcodeMat);
+        }
+        catch (const std::exception&)
+        {
+            Q_EMIT showMessagebox("创建二维码失败，请稍后重试");
+            return;
+        }
         if (AllowDrawQRCode.load())
         {
             return;
@@ -538,7 +547,7 @@ void WindowLogin::StartQRCodeLogin()
 
 void WindowLogin::CheckQRCodeLoginState()
 {
-    auto [state, uid, game_token] = GetQRCodeState(ticket);
+    auto [state, uid, mid, stoken] = GetQRCodeState(ticket);
     switch (state)
     {
     case LoginQRCodeState::Init:
@@ -552,8 +561,7 @@ void WindowLogin::CheckQRCodeLoginState()
     break;
     case LoginQRCodeState::Confirmed:
     {
-        auto [code, mid, stoken] = GetStokenByGameToken(uid, game_token);
-        if (code == 0)
+        if (!uid.empty() && !mid.empty() && !stoken.empty())
         {
             std::string name{ getMysUserName(uid) };
             emit AddUserInfo(name, stoken, uid, mid, "官服");
@@ -562,7 +570,7 @@ void WindowLogin::CheckQRCodeLoginState()
         }
         else
         {
-            emit showMessagebox("获取STOKEN失败！");
+            emit showMessagebox("扫码成功但登录凭证不完整，请重新扫码！");
         }
         return;
     }
