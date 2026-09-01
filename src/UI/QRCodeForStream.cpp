@@ -44,6 +44,13 @@ void QRCodeForStream::setLoginInfo(const std::string_view uid, const std::string
     this->m_name = name;
 }
 
+void QRCodeForStream::setLoginInfo1(const std::string_view uid, const std::string_view stoken, const std::string_view mid)
+{
+    this->uid = uid;
+    this->gameToken = stoken;
+    this->mid = mid;
+}
+
 void QRCodeForStream::setServerType(const ServerType servertype)
 {
     this->servertype = servertype;
@@ -108,15 +115,9 @@ void QRCodeForStream::processOfficialFrame(const cv::Mat& img)
     thread_local QRScanner qrScanner;
     std::string str;
     qrScanner.decodeSingle(img, str);
-    if (str.size() < 85)
+    std::string ticket;
+    if (!parseOfficialQRCode(str, ticket))
         return;
-
-    const std::string_view view(str.data() + 79, 3);
-    if (!setGameType.contains(view))
-        return;
-
-    setGameType[view]();
-    const std::string ticket = str.substr(str.size() - 24, 24);
     if (lastTicket == ticket)
         return;
 
@@ -128,8 +129,11 @@ void QRCodeForStream::processOfficialFrame(const cv::Mat& img)
     if (!m_stop.load(std::memory_order_acquire))
         return;
 
-    if (!lowlatency::FastScanQRLogin(scanUrl, ticket, gameType, device_id))
+    const std::string passportQrUrl = PandaScanQRCode(scanUrl, ticket, gameType);
+    if (passportQrUrl.empty())
         return;
+
+    lastQrCode = passportQrUrl;
 
     const nlohmann::json config = nlohmann::json::parse(m_config->getConfig(), nullptr, false);
     if (!config.is_discarded() && config.value("auto_login", false))
@@ -371,8 +375,8 @@ void QRCodeForStream::continueLastLogin()
         using enum ServerType;
     case Official:
     {
-        const bool ok = lowlatency::FastConfirmQRLogin(
-            confirmUrl, uid, gameToken, lastTicket, gameType, device_id);
+        const bool ok = ScanPassportQRLogin(lastQrCode, gameToken, mid) &&
+                        ConfirmPassportQRLogin(lastQrCode, gameToken, mid);
         Q_EMIT loginResults(ok ? ScanRet::SUCCESS : ScanRet::FAILURE_2);
     }
     break;

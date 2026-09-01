@@ -43,6 +43,13 @@ void QRCodeForScreen::setLoginInfo(const std::string& uid, const std::string& to
     this->m_name = name;
 }
 
+void QRCodeForScreen::setLoginInfo1(const std::string& uid, const std::string& stoken, const std::string& mid)
+{
+    this->uid = uid;
+    this->gameToken = stoken;
+    this->mid = mid;
+}
+
 void QRCodeForScreen::LoginOfficial()
 {
     QThreadPool threadPool;
@@ -69,17 +76,9 @@ void QRCodeForScreen::LoginOfficial()
             thread_local QRScanner qrScanners;
             std::string str;
             qrScanners.decodeSingle(img, str);
-            if (str.size() < 85)
-            {
+            std::string ticket;
+            if (!parseOfficialQRCode(str, ticket))
                 return;
-            }
-            std::string_view view(str.c_str() + 79, 3);
-            if (!setGameType.contains(view))
-            {
-                return;
-            }
-            setGameType[view]();
-            const std::string_view ticket(str.data() + str.size() - 24, 24);
             if (lastTicket == ticket)
             {
                 return;
@@ -91,9 +90,11 @@ void QRCodeForScreen::LoginOfficial()
                     mtx.unlock();
                     return;
                 }
-                if (ScanQRLogin(scanUrl.data(), ticket, gameType))
+                const std::string passportQrUrl = PandaScanQRCode(scanUrl, ticket, gameType);
+                if (!passportQrUrl.empty())
                 {
                     lastTicket = ticket;
+                    lastQrCode = passportQrUrl;
                     nlohmann::json config = nlohmann::json::parse(m_config->getConfig());
                     if (config["auto_login"])
                     {
@@ -198,7 +199,8 @@ void QRCodeForScreen::continueLastLogin()
         using enum ServerType;
     case Official:
     {
-        bool b = ConfirmQRLogin(confirmUrl, uid, gameToken, lastTicket, gameType);
+        bool b = ScanPassportQRLogin(lastQrCode, gameToken, mid) &&
+                 ConfirmPassportQRLogin(lastQrCode, gameToken, mid);
         if (b)
         {
             Q_EMIT loginResults(ScanRet::SUCCESS);

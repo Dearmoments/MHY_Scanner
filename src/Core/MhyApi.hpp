@@ -170,6 +170,98 @@ inline std::tuple<LoginQRCodeState, std::string, std::string, std::string> GetQR
     return { LoginQRCodeState::Confirmed, uid, mid, stoken };
 }
 
+inline std::string GetPassportQRParam(const std::string_view qrCode,
+                                      const std::string_view key,
+                                      const std::string_view terminators)
+{
+    const std::string needle = std::string(key) + "=";
+    const std::size_t position = qrCode.find(needle);
+    if (position == std::string_view::npos)
+        return {};
+
+    const std::size_t valueBegin = position + needle.size();
+    const std::size_t valueEnd = qrCode.find_first_of(terminators, valueBegin);
+    return std::string(qrCode.substr(valueBegin, valueEnd == std::string_view::npos ?
+        qrCode.size() - valueBegin : valueEnd - valueBegin));
+}
+
+inline std::string PandaScanQRCode(const std::string_view url,
+                                   const std::string_view ticket,
+                                   const GameType type)
+{
+    if (url.empty() || ticket.empty())
+        return {};
+
+    const nlohmann::json body{
+        { "passport_app_id", "bll8iq97cem8" },
+        { "ticket", ticket },
+        { "app_id", static_cast<int>(type) },
+        { "device", device_id },
+        { "ts", GetUnixTimeStampSeconds() }
+    };
+    const auto response = cpr::Post(
+        cpr::Url{ std::string(url) },
+        cpr::Body{ body.dump() },
+        cpr::Header{
+            { "Content-Type", "application/json" },
+            { "x-rpc-app_id", "bll8iq97cem8" },
+            { "x-rpc-device_id", device_id }
+        });
+
+    const auto data = nlohmann::json::parse(response.text, nullptr, false);
+    if (response.error || response.status_code != 200 || data.is_discarded() || data.value("retcode", -1) != 0)
+        return {};
+    if (!data.contains("data") || !data["data"].is_object())
+        return {};
+    return JsonString(data["data"], "passport_qr_url");
+}
+
+inline bool PassportQRCodeLogin(const std::string_view qrCode,
+                                const std::string_view stoken,
+                                const std::string_view mid,
+                                const bool confirm)
+{
+    const std::string ticket = GetPassportQRParam(qrCode, "tk", "&");
+    const std::string tokenTypes = GetPassportQRParam(qrCode, "token_types", "#");
+    if (ticket.empty() || tokenTypes.empty() || stoken.empty() || mid.empty())
+        return false;
+
+    const nlohmann::json body{
+        { "ticket", ticket },
+        { "token_types", nlohmann::json::array({ tokenTypes }) }
+    };
+    const std::string endpoint = confirm ?
+        std::string(std::string_view(api::mhy::passport::confirm_qr_login)) :
+        std::string(std::string_view(api::mhy::passport::scan_qr_login));
+    const auto response = cpr::Post(
+        cpr::Url{ endpoint },
+        cpr::Body{ body.dump() },
+        cpr::Header{
+            { "Content-Type", "application/json" },
+            { "x-rpc-app_id", "bll8iq97cem8" },
+            { "x-rpc-device_id", device_id },
+            { "Cookie", "stoken=" + std::string(stoken) + ";mid=" + std::string(mid) }
+        });
+
+    const auto data = nlohmann::json::parse(response.text, nullptr, false);
+    return !response.error && response.status_code == 200 && !data.is_discarded() &&
+           data.value("retcode", -1) == 0;
+}
+
+inline bool ScanPassportQRLogin(const std::string_view qrCode,
+                                const std::string_view stoken,
+                                const std::string_view mid)
+{
+    return PassportQRCodeLogin(qrCode, stoken, mid, false);
+}
+
+inline bool ConfirmPassportQRLogin(const std::string_view qrCode,
+                                   const std::string_view stoken,
+                                   const std::string_view mid)
+{
+    return PassportQRCodeLogin(qrCode, stoken, mid, true);
+}
+
 inline std::string getMysUserName(const std::string_view uid)
 {
     static constexpr std::string_view url = api::mhy::mys::userinfo;
