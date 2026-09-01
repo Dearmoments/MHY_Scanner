@@ -166,9 +166,37 @@ void WindowMain::AddAccount()
     }
     windowLogin = new WindowLogin(this);
     connect(windowLogin, &WindowLogin::AddUserInfo, this, [this](const std::string name, const std::string token, const std::string uid, const std::string mid, const std::string type) {
-        if (checkDuplicates(uid.data()))
+        int existingIndex = -1;
+        for (int i = 0; i < static_cast<int>(userinfo["num"]); ++i)
         {
-            QMessageBox::information(this, "提示", "该账号已添加，无需重复添加", QMessageBox::Yes);
+            if (userinfo["account"][i].value("uid", "") == uid)
+            {
+                existingIndex = i;
+                break;
+            }
+        }
+
+        if (existingIndex >= 0)
+        {
+            // Re-adding an existing account is also the recovery path for an
+            // expired stoken. Refresh the credentials instead of discarding
+            // the newly scanned token as a duplicate.
+            auto& account = userinfo["account"][existingIndex];
+            account["access_key"] = token;
+            account["uid"] = uid;
+            account["name"] = name;
+            account["type"] = type;
+            account["mid"] = mid;
+            m_config->updateConfig(userinfo.dump());
+
+            if (existingIndex < ui.tableWidget->rowCount())
+            {
+                ui.tableWidget->item(existingIndex, 1)->setText(QString::fromStdString(uid));
+                ui.tableWidget->item(existingIndex, 2)->setText(QString::fromStdString(name));
+                ui.tableWidget->item(existingIndex, 3)->setText(QString::fromStdString(type));
+            }
+
+            QMessageBox::information(this, "提示", "该账号已存在，登录凭证已刷新", QMessageBox::Yes);
             return;
         }
         //TODO 有预期外信号触发,潜在bug
@@ -530,7 +558,7 @@ void WindowMain::failure()
 {
     QMessageBox* messageBox = new QMessageBox(this);
     messageBox->setAttribute(Qt::WA_DeleteOnClose);
-    messageBox->setText("登录状态失效，\n请重新添加账号！");
+    messageBox->setText("账号登录凭证已失效或接口拒绝请求，\n请在“添加账号 → 扫码登录”中重新扫码刷新凭证！");
     messageBox->setWindowTitle("提示");
     messageBox->setIcon(QMessageBox::Information);
     messageBox->show();

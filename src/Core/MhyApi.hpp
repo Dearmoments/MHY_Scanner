@@ -8,6 +8,7 @@
 #include <optional>
 #include <iostream>
 #include <stdexcept>
+#include <tuple>
 
 #include <nlohmann/json.hpp>
 #include <cpr/cpr.h>
@@ -79,7 +80,7 @@ inline cpr::Header GetQrLoginRequestHeader()
     return {
         { "Accept", "application/json, text/plain, */*" },
         { "User-Agent", "HYPContainer/1.3.3.182" },
-        { "x-rpc-app_id", "ddxf5dufpuyo" },
+        { "x-rpc-app_id", "dw9y09jqjpxc" },
         { "x-rpc-client_type", "3" },
         { "x-rpc-device_id", device_id },
         { "Content-Type", "application/json" }
@@ -203,19 +204,34 @@ inline std::tuple<int, std::string> GetGameTokenByStoken(
     const std::string_view stoken,
     const std::string_view mid)
 {
-    const auto response = cpr::Get(
-        cpr::Url{ api::mhy::takumi::game_token },
-        cpr::Parameters{
-            { "stoken", stoken.data() },
-            { "mid", mid.data() } });
+    const auto requestByCookie = [&](const std::string_view tokenName) -> std::tuple<int, std::string> {
+        const auto response = cpr::Get(
+            cpr::Url{ api::mhy::takumi::game_token },
+            cpr::Header{
+                { "Accept", "application/json" },
+                { "Cookie", std::string(tokenName) + "=" + std::string(stoken) + "; mid=" + std::string(mid) }
+            });
 
-    const auto j = nlohmann::json::parse(response.text);
-    const int retcode = j.value("retcode", -1);
+        const auto j = nlohmann::json::parse(response.text, nullptr, false);
+        if (response.error || response.status_code != 200 || j.is_discarded())
+            return { -1, {} };
 
-    if (retcode != 0)
-        return { retcode, {} };
+        const int retcode = j.value("retcode", -1);
+        if (retcode != 0)
+            return { retcode, {} };
 
-    return { 0, j["data"]["game_token"].get<std::string>() };
+        const auto gameToken = JsonString(j.value("data", nlohmann::json::object()), "game_token");
+        return gameToken.empty() ? std::tuple<int, std::string>{ -1, {} }
+                                  : std::tuple<int, std::string>{ 0, gameToken };
+    };
+
+    if (stoken.starts_with("v2_"))
+    {
+        if (auto result = requestByCookie("stoken_v2"); std::get<0>(result) == 0)
+            return result;
+    }
+
+    return requestByCookie("stoken");
 }
 
 inline std::tuple<int, GeetestData> CreateLoginCaptcha(
