@@ -11,7 +11,10 @@ static std::mutex mtx;
 
 static bool isOpen()
 {
-    HANDLE hMutex = CreateMutex(NULL, true, TEXT("T08lJ8CJmJiyoxdV"));
+    // Keep the reconstructed 1.2 scanner isolated from older installations.
+    // The legacy mutex name was shared by every build, so launching the new
+    // EXE could silently focus an already-running old EXE instead.
+    HANDLE hMutex = CreateMutex(NULL, true, TEXT("MHY_Scanner_1_2_lowlatency"));
     return GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
