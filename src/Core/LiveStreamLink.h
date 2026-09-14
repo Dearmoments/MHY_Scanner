@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <string>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <memory>
 
@@ -29,6 +30,8 @@ struct LiveStreamInfo
 {
     LiveStreamStatus status;
     std::string link;
+    // FFmpeg HTTP options required by the platform's video CDN.
+    std::map<std::string, std::string> options;
 };
 
 class LiveBili

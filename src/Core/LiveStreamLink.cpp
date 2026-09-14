@@ -55,7 +55,13 @@ LiveStreamInfo LiveBili::GetLiveStreamInfo()
         {
             return { LiveStreamStatus::Error, "" };
         }
-        return { LiveStreamStatus::Normal, link };
+        // Some Bilibili CDN nodes reject FLV requests unless BOTH headers are
+        // present. Use FFmpeg option names, not raw HTTP header names.
+        return { LiveStreamStatus::Normal, link, {
+            { "referer", "https://live.bilibili.com/" },
+            { "user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36" }
+        } };
     }
     catch (const nlohmann::json::exception& e)
     {

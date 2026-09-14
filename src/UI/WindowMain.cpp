@@ -521,6 +521,7 @@ bool WindowMain::GetStreamLink(const std::string& roomid, std::string& url, std:
     if (info.status == LiveStreamStatus::Normal)
     {
         url = info.link;
+        heards = info.options;
         return true;
     }
     else
